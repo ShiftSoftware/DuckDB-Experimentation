@@ -145,7 +145,8 @@ public class DuckDBUtil
     public static void CreateJPMParquet(
         string workingDirecotyr,
         string parquetFileName,
-        string sourceCSVFile
+        string sourceCSVFile,
+        int maxRecords = -1
     )
     {
         var parquetFile = Path.Combine(workingDirecotyr, parquetFileName);
@@ -156,6 +157,8 @@ public class DuckDBUtil
             using var conn = new DuckDBConnection($"DataSource={tempDbFile}");
             conn.Open();
 
+            var limitClause = maxRecords > 0 ? $"LIMIT {maxRecords}" : "";
+
             var sql = $"""
                 COPY (
                   SELECT *
@@ -165,6 +168,7 @@ public class DuckDBUtil
                       header=true,
                       sample_size=-1
                   )
+                  {limitClause}
                 ) TO '{parquetFile}' (FORMAT PARQUET);
                 """;
 
