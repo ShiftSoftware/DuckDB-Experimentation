@@ -141,4 +141,43 @@ public class DuckDBUtil
 
         return conn;
     }
+
+    public static void CreateJPMParquet(
+        string workingDirecotyr,
+        string parquetFileName,
+        string sourceCSVFile
+    )
+    {
+        var parquetFile = Path.Combine(workingDirecotyr, parquetFileName);
+        var tempDbFile = Path.Combine(workingDirecotyr, "temp_jpm.db");
+
+        try
+        {
+            using var conn = new DuckDBConnection($"DataSource={tempDbFile}");
+            conn.Open();
+
+            var sql = $"""
+                COPY (
+                  SELECT *
+                  FROM read_csv(
+                      '{sourceCSVFile}',
+                      delim=';',
+                      header=true,
+                      sample_size=-1
+                  )
+                ) TO '{parquetFile}' (FORMAT PARQUET);
+                """;
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
+        }
+        finally
+        {
+            if (File.Exists(tempDbFile))
+            {
+                File.Delete(tempDbFile);
+            }
+        }
+    }
 }
