@@ -8,21 +8,51 @@ public class DuckDbTests
 {
     private readonly ITestOutputHelper output;
 
+    private const string WORKING_DIRECTORY = @"C:\mounts\DuckDBTests";
+    private const string FIRST_TEST_DATA_PATH = @"C:\mounts\DealerInvoiceData";
+    private const string SECOND_TEST_DATA_PATH = @"C:\mounts\DealerInvoiceData2";
+
     public DuckDbTests(ITestOutputHelper output)
     {
         this.output = output;
+
+        Directory.CreateDirectory(WORKING_DIRECTORY);
     }
 
     [Fact]
-    public void CreateDb()
+    public void CreateFirstVehiclesDb()
     {
-        DuckDBUtil.CreateDuckDBDatabase(@$"DataSource=C:\mounts\DealerInvoiceData_{DateTime.UtcNow.ToString("yyyy-MM-dd-HH-mm-ss")}.duckdb");
+        DuckDBUtil.CreateVehiclesDatabase(
+            workingDirecotyr: WORKING_DIRECTORY,
+            duckDbFileName: "FirstVehiclesDatabase.duckdb",
+            testDataPath: FIRST_TEST_DATA_PATH
+        );
+    }
+
+    [Fact]
+    public void CreateSecondVehiclesDb()
+    {
+        DuckDBUtil.CreateVehiclesDatabase(
+            workingDirecotyr: WORKING_DIRECTORY,
+            duckDbFileName: "SecondVehiclesDatabase.duckdb",
+            testDataPath: SECOND_TEST_DATA_PATH
+        );
+    }
+
+    [Fact]
+    public void CreateMasterDb()
+    {
+        DuckDBUtil.CreateMasterDatabase(
+            workingDirecotyr: WORKING_DIRECTORY,
+            duckDbFileName: "MasterDatabase.duckdb",
+            testDataPath: FIRST_TEST_DATA_PATH
+        );
     }
 
     [Fact]
     public void JoinVehicleDataByVIN()
     {
-        var conn = new DuckDBConnection(@"DataSource=C:\mounts\DealerInvoiceData.duckdb");
+        var conn = new DuckDBConnection($@"DataSource={Path.Combine(WORKING_DIRECTORY, "MasterDatabase.duckdb")}");
         conn.Open();
 
         var sql = $@"
@@ -71,16 +101,14 @@ public class DuckDbTests
         }
     }
 
-    private string GetPreviousDatabaseFile()
-    {
-        return @"DataSource=C:\mounts\DealerInvoiceData_2025-07-25-15-00-00.duckdb";
-    }
-
     [Fact]
     public void DiffDuckDBFiles()
     {
-        string previousDatabasePath = "C:\\mounts\\DealerInvoiceData_2025-07-25-15-00-00.duckdb";
-        var currentDatabasePath = @"C:\mounts\DealerInvoiceData_2025-07-25-15-35-29.duckdb";
+        var previousDatabasePath = Path.Combine(WORKING_DIRECTORY, "FirstVehiclesDatabase.duckdb");
+        var currentDatabasePath = Path.Combine(WORKING_DIRECTORY, "SecondVehiclesDatabase.duckdb");
+
+        Assert.True(File.Exists(currentDatabasePath));
+        Assert.True(File.Exists(currentDatabasePath));
 
         using var conn = new DuckDBConnection("DataSource=:memory:");
         conn.Open();
@@ -96,47 +124,14 @@ public class DuckDbTests
 
         using (var cmd = conn.CreateCommand())
         {
-                cmd.CommandText = @"
+            cmd.CommandText = @"
                 SELECT * FROM current.Vehicle
                 EXCEPT
-                SELECT * FROM previous.Vehicle;
+                SELECT * FROM previous.Vehicle
             ";
 
             using var reader = cmd.ExecuteReader();
             output.WriteLine("DIFF: Vehicle");
-            while (reader.Read())
-            {
-                this.output.WriteLine(reader["VIN"].ToString()); // Print the changed VINs
-            }
-        }
-
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = @"
-                SELECT * FROM current.Labor
-                EXCEPT
-                SELECT * FROM previous.Labor;
-            ";
-
-            using var reader = cmd.ExecuteReader();
-            output.WriteLine("DIFF: Labor");
-            while (reader.Read())
-            {
-                this.output.WriteLine(reader["VIN"].ToString()); // Print the changed VINs
-            }
-        }
-
-  
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = @"
-                SELECT * FROM current.Part
-                EXCEPT
-                SELECT * FROM previous.Part;
-            ";
-
-            using var reader = cmd.ExecuteReader();
-            output.WriteLine("DIFF: Part");
             while (reader.Read())
             {
                 this.output.WriteLine(reader["VIN"].ToString()); // Print the changed VINs
