@@ -184,4 +184,60 @@ public class DuckDBUtil
             }
         }
     }
+
+    public static void CreateParquetFromExcel(
+        string workingDirectory,
+        string parquetFileName,
+        string sourceExcelFile,
+        string? sheetName = null,
+        int maxRecords = -1
+    )
+    {
+        var parquetFile = Path.Combine(workingDirectory, parquetFileName);
+        var tempDbFile = Path.Combine(workingDirectory, "temp_excel.db");
+
+        try
+        {
+            using var conn = new DuckDBConnection($"DataSource={tempDbFile}");
+            conn.Open();
+
+            // Install and load the spatial extension which includes Excel support
+            using (var installCmd = conn.CreateCommand())
+            {
+                installCmd.CommandText = "INSTALL spatial;";
+                installCmd.ExecuteNonQuery();
+            }
+
+            using (var loadCmd = conn.CreateCommand())
+            {
+                loadCmd.CommandText = "LOAD spatial;";
+                loadCmd.ExecuteNonQuery();
+            }
+
+            var limitClause = maxRecords > 0 ? $"LIMIT {maxRecords}" : "";
+            var sheetClause = !string.IsNullOrEmpty(sheetName) ? $"sheet_name='{sheetName}', " : "";
+
+            var sql = $"""
+                COPY (
+                  SELECT *
+                  FROM st_read(
+                      '{sourceExcelFile}',
+                      {sheetClause}open_options=['HEADERS=FORCE', 'FIELD_TYPES=AUTO']
+                  )
+                  {limitClause}
+                ) TO '{parquetFile}' (FORMAT PARQUET);
+                """;
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.ExecuteNonQuery();
+        }
+        finally
+        {
+            if (File.Exists(tempDbFile))
+            {
+                File.Delete(tempDbFile);
+            }
+        }
+    }
 }
